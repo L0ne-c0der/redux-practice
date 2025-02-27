@@ -5,17 +5,20 @@ import thunk from "redux-thunk"; //middleware for async code
 //this import works only for older versions of redux
 
 //action name constants
-const init = 'accounts/init'
+// const init = 'accounts/init'
 const inc =  'accounts/increment'
 const dec = 'accounts/decrement'
 const incByAmt = 'accounts/incrementByAmount'
+const getAccUserPending = 'accounts/getUser/pending'
+const getAccUserFulfilled = 'accounts/getUser/fulfilled'
+const getAccUserRejected = 'accounts/getUser/rejected'
 const incBonus = 'bonus/increment';
 
 //store
 //const store = createStore(reducer); //reducer is a function
 const store = createStore(
     combineReducers({
-        account: accountReducer,
+        accounts: accountReducer,
         bonus: bonusReducer
     }), 
     applyMiddleware(logger.default, thunk.default)
@@ -51,8 +54,14 @@ function accountReducer(state={amount:1}, action){
 
     //using switch case
     switch (action.type) {
-        case init:
-            return {amount : action.payload};
+        case getAccUserFulfilled:
+            return {amount : action.payload, pending: false};   
+            break;
+        case getAccUserRejected:
+            return {...state, error: action.error, pending: false};
+            break;
+        case getAccUserPending:
+            return {...state, pending: true};
             break;
         case dec:
             return {amount : state.amount-1};
@@ -92,12 +101,12 @@ function bonusReducer(state={points:0}, action){
 
 
 //Async API call
-// async function getUser(){
+// async function getUserAccount(){
 //     const {data} = await axios.get('http://localhost:3000/accounts/1')
 //     console.log(data.amount)
 // }
 
-// getUser()
+// getUserAccount()
 
 //problem occurs when you want to put the async and await code in the init action creator
 //because action creators should return plain objects
@@ -116,18 +125,41 @@ function bonusReducer(state={points:0}, action){
 //dispatch is the same dispatch function that is used to dispatch actions
 //getState is a function that returns the current state of the store
 
-// async function getUser(dispatch, getState){
+// async function getUserAccount(dispatch, getState){
 //     const {data} = await axios.get('http://localhost:3000/accounts/1')
 //     dispatch(initUser(data.amount))
 // }
 
- function getUser(id){
+//async functions use a promise
+//a promise has 2 states: pending, resolved
+//when resolved, it has 2 states: fulfilled, rejected
+function getUserAccount(id){
     return async (dispatch, getState)=> {
-        const {data} = await axios.get(`http://localhost:3000/accounts/${id}`)
-        dispatch(initUser(data.amount))
+        dispatch(getAccountUserPending())
+        try {
+            const {data} = await axios.get(`http://localhost:3000/accounts/${id}`)
+            dispatch(getAccountUserFulfilled(data.amount))
+        } catch (error) {
+            dispatch(getAccountUserRejected(error.message))
+        }
+        
     }
 }
 
+function getAccountUserFulfilled(value){
+    return {type: getAccUserFulfilled,
+        payload: value
+    }
+}
+function getAccountUserRejected(error){
+    return {type: getAccUserRejected,
+        error: error
+    }
+}
+function getAccountUserPending(){
+    return {type: getAccUserPending
+    }
+}
 
 function initUser(value){
     return {type: init,
@@ -155,23 +187,23 @@ function incrementBonus(){
 //action, an object with a 'type' attribute
 //dispatch function to increase the value of the state
 // setTimeout(() => {
-// store.dispatch(getUser);
+// store.dispatch(getUserAccount);
 // }, 2000);
 
-//when passing getUser, you should not call it, and pass it as a reference
-//store.dispatch(getUser) //wrong
-//store.dispatch(getUser()) //wrong
-//store.dispatch(getUser) //right
+//when passing getUserAccount, you should not call it, and pass it as a reference
+//store.dispatch(getUserAccount) //wrong
+//store.dispatch(getUserAccount()) //wrong
+//store.dispatch(getUserAccount) //right
 //then redux will observe that it is an async fun
 //and will cal it separately
 //when logging, you can notice that it is called twice
 //once for the dispatch for the action, and once for the async function
 //this is because the async function is called separately
 
-//output for store.dispatch(getUser):
+//output for store.dispatch(getUserAccount):
 // action undefined @ 12:16:50.490
 //    prev state { amount: 1 }
-//    action     [AsyncFunction: getUser]
+//    action     [AsyncFunction: getUserAccount]
 //    next state { amount: 1 }
 //  action init @ 12:16:50.529
 //    prev state { amount: 1 }
@@ -180,6 +212,7 @@ function incrementBonus(){
 
 
 setTimeout(() => {
+    store.dispatch(getUserAccount(1));
     // store.dispatch(incrementByAmount(100));
-    store.dispatch(incrementBonus());
+    // store.dispatch(incrementBonus());
     }, 2000);
